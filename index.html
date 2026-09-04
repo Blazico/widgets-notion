@@ -51,6 +51,7 @@
   input[type=date]{min-width:142px}
   button{font:inherit;font-size:13px;font-weight:500;padding:7px 14px;border:0;
          border-radius:6px;background:var(--accent);color:#fff;cursor:pointer}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:400}
   .hits{margin-top:8px;display:flex;flex-direction:column;gap:2px}
   .hit{cursor:pointer;padding:6px 8px;border-radius:6px;font-size:13px}
   .hit:hover{background:var(--card)}
@@ -86,12 +87,39 @@ var MAX_DAYS = 21;
 var FC_HORIZON = 15;
 
 var qs = new URLSearchParams(location.search);
-var state = {
+var urlState = {
   lat: parseFloat(qs.get("lat")),
   lon: parseFloat(qs.get("lon")),
   name: qs.get("name") || "",
   start: qs.get("start") || "",
   end: qs.get("end") || ""
+};
+
+// Memoria: una clave por ubicacion, para que cada widget recuerde lo suyo.
+var STORE_KEY = "clima:" + (isFinite(urlState.lat) ? urlState.lat + "," + urlState.lon : "manual");
+
+function loadSaved(){
+  try { var raw = localStorage.getItem(STORE_KEY); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }   // iframes de terceros pueden bloquear el storage
+}
+function saveState(){
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      lat: state.lat, lon: state.lon, name: state.name, start: state.start, end: state.end
+    }));
+  } catch(e){}
+}
+function clearSaved(){ try { localStorage.removeItem(STORE_KEY); } catch(e){} }
+
+var saved = loadSaved();
+// PRECEDENCIA: la URL manda. Es lo unico que viaja entre dispositivos y entre personas.
+// La memoria local solo rellena lo que la URL no trae (p.ej. paginas de Destino sin fechas).
+var state = {
+  lat:   isFinite(urlState.lat) ? urlState.lat : (saved && isFinite(saved.lat) ? saved.lat : NaN),
+  lon:   isFinite(urlState.lon) ? urlState.lon : (saved && isFinite(saved.lon) ? saved.lon : NaN),
+  name:  urlState.name  || (saved && saved.name  ? saved.name  : ""),
+  start: urlState.start || (saved && saved.start ? saved.start : ""),
+  end:   urlState.end   || (saved && saved.end   ? saved.end   : "")
 };
 
 function iso(d){ return d.toISOString().slice(0,10); }
@@ -171,10 +199,13 @@ function controlsHTML(){
     + '<div class="field"><label>Desde</label><input id="s" type="date" value="'+(state.start||"")+'"></div>'
     + '<div class="field"><label>Hasta</label><input id="e" type="date" value="'+(state.end||"")+'"></div>'
     + '<button id="go">Ver clima</button>'
+    + ((loadSaved() && !urlState.start) ? '<button id="reset" class="ghost">Restablecer</button>' : '')
     + '</div><div class="hits" id="hits"></div></details>';
 }
 
 function wireControls(){
+  var rs = document.getElementById("reset");
+  if(rs) rs.onclick = function(){ clearSaved(); location.reload(); };
   var go = document.getElementById("go");
   if(!go) return;
   go.onclick = function(){
@@ -268,7 +299,7 @@ function load(){
     ? getForecast(state.lat, state.lon, state.start, endCapped)
     : getHistorical(state.lat, state.lon, state.start, endCapped);
 
-  p.then(function(days){ render(days, useForecast ? "forecast" : "historical", state.name); })
+  p.then(function(days){ saveState(); render(days, useForecast ? "forecast" : "historical", state.name); })
    .catch(function(err){
       app.innerHTML = '<div class="top"><h1>'+(state.name||"Clima")+'</h1></div>'
         + '<div class="note err">No se pudo cargar: '+err.message+'</div>' + controlsHTML();
