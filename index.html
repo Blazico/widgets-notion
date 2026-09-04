@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clima del viaje</title>
+<style>
+  :root{
+    --bg:#ffffff; --fg:#37352f; --muted:#787774; --line:#e9e9e7;
+    --card:#f7f7f5; --accent:#2383e2; --warnbg:#fdf3e3; --warnfg:#b8860b;
+    --okbg:#eaf3ee; --okfg:#448361;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#191919; --fg:#e6e6e4; --muted:#9b9b98; --line:#2f2f2f;
+           --card:#242424; --accent:#5aa9f0; --warnbg:#3a2f1c; --warnfg:#e0a94a;
+           --okbg:#1e2c24; --okfg:#6fae88; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+       padding:14px;}
+  .top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  h1{font-size:17px;margin:0;font-weight:600;letter-spacing:-.01em}
+  .range{color:var(--muted);font-size:13px}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
+         padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .badge.fc{background:var(--okbg);color:var(--okfg)}
+  .badge.hist{background:var(--warnbg);color:var(--warnfg)}
+  .note{color:var(--muted);font-size:12px;margin:8px 0 12px}
+  .days{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px}
+  .day{flex:0 0 94px;background:var(--card);border:1px solid var(--line);
+       border-radius:10px;padding:9px 8px;text-align:center}
+  .dow{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .dnum{font-size:12px;font-weight:600;margin-bottom:4px}
+  .icon{font-size:22px;line-height:1.3}
+  .desc{font-size:10px;color:var(--muted);height:26px;display:flex;align-items:center;
+        justify-content:center;margin-bottom:3px}
+  .temp{font-size:13px;font-weight:600}
+  .temp .min{color:var(--muted);font-weight:400}
+  .rain{font-size:11px;color:var(--accent);margin-top:3px;min-height:15px}
+  .summary{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;padding-top:10px;
+           border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+  .summary b{color:var(--fg);font-weight:600}
+  details{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+  summary{cursor:pointer;font-size:12px;color:var(--muted)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px}
+  .field{display:flex;flex-direction:column;gap:3px}
+  .field label{font-size:11px;color:var(--muted)}
+  input{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);
+        border-radius:6px;background:var(--bg);color:var(--fg)}
+  input[type=date]{min-width:142px}
+  button{font:inherit;font-size:13px;font-weight:500;padding:7px 14px;border:0;
+         border-radius:6px;background:var(--accent);color:#fff;cursor:pointer}
+  .hits{margin-top:8px;display:flex;flex-direction:column;gap:2px}
+  .hit{cursor:pointer;padding:6px 8px;border-radius:6px;font-size:13px}
+  .hit:hover{background:var(--card)}
+  .hit small{color:var(--muted)}
+  .msg{padding:14px;color:var(--muted);font-size:13px}
+  .err{color:#c4554d}
+</style>
+</head>
+<body>
+<div id="app"><div class="msg">Cargando...</div></div>
+
+<script>
+var WMO = {
+  0:["☀️","Despejado"], 1:["🌤️","Mayormente despejado"],
+  2:["⛅","Parcialmente nublado"], 3:["☁️","Nublado"],
+  45:["🌫️","Niebla"], 48:["🌫️","Niebla con escarcha"],
+  51:["🌦️","Llovizna débil"], 53:["🌦️","Llovizna"],
+  55:["🌦️","Llovizna intensa"], 56:["🌧️","Llovizna helada"],
+  57:["🌧️","Llovizna helada"], 61:["🌧️","Lluvia débil"],
+  63:["🌧️","Lluvia"], 65:["🌧️","Lluvia fuerte"],
+  66:["🌧️","Lluvia helada"], 67:["🌧️","Lluvia helada"],
+  71:["🌨️","Nieve débil"], 73:["🌨️","Nieve"],
+  75:["❄️","Nieve fuerte"], 77:["❄️","Granizo fino"],
+  80:["🌦️","Chubascos"], 81:["🌧️","Chubascos"],
+  82:["⛈️","Chubascos fuertes"], 85:["🌨️","Chubascos de nieve"],
+  86:["❄️","Chubascos de nieve"], 95:["⛈️","Tormenta"],
+  96:["⛈️","Tormenta con granizo"], 99:["⛈️","Tormenta con granizo"]
+};
+var DOW = ["dom","lun","mar","mié","jue","vie","sáb"];
+var MON = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+var HIST_YEARS = 5;
+var MAX_DAYS = 21;
+var FC_HORIZON = 15;
+
+var qs = new URLSearchParams(location.search);
+var state = {
+  lat: parseFloat(qs.get("lat")),
+  lon: parseFloat(qs.get("lon")),
+  name: qs.get("name") || "",
+  start: qs.get("start") || "",
+  end: qs.get("end") || ""
+};
+
+function iso(d){ return d.toISOString().slice(0,10); }
+function parseD(s){ var p = s.split("-").map(Number); return new Date(Date.UTC(p[0],p[1]-1,p[2])); }
+function fmt(d){ return DOW[d.getUTCDay()] + " " + d.getUTCDate() + " " + MON[d.getUTCMonth()]; }
+function daysBetween(a,b){ return Math.round((b-a)/86400000); }
+
+function buildDates(start,end){
+  var out = [], d = parseD(start), last = parseD(end);
+  while (d <= last && out.length < MAX_DAYS){ out.push(new Date(d)); d = new Date(d.getTime()+86400000); }
+  return out;
+}
+
+function jget(url){
+  return fetch(url).then(function(r){
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  });
+}
+
+function getForecast(lat,lon,start,end){
+  var u = "https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon
+    + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+    + "&start_date="+start+"&end_date="+end+"&timezone=auto";
+  return jget(u).then(function(j){
+    return j.daily.time.map(function(t,i){
+      return { date: parseD(t), code: j.daily.weather_code[i],
+               max: j.daily.temperature_2m_max[i], min: j.daily.temperature_2m_min[i],
+               rain: j.daily.precipitation_probability_max[i], rainLabel: "prob. lluvia" };
+    });
+  });
+}
+
+function getHistorical(lat,lon,start,end){
+  var dates = buildDates(start,end);
+  var thisYear = new Date().getUTCFullYear();
+  var years = [];
+  for (var k = 1; k <= HIST_YEARS; k++) years.push(thisYear - k);
+  var s0 = parseD(start);
+
+  return Promise.all(years.map(function(y){
+    var s = new Date(Date.UTC(y, s0.getUTCMonth(), s0.getUTCDate()));
+    var e = new Date(s.getTime() + (dates.length-1)*86400000);
+    var u = "https://archive-api.open-meteo.com/v1/archive?latitude="+lat+"&longitude="+lon
+      + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum"
+      + "&start_date="+iso(s)+"&end_date="+iso(e)+"&timezone=auto";
+    return jget(u).catch(function(){ return null; });
+  })).then(function(runs){
+    var ok = runs.filter(Boolean);
+    if(!ok.length) throw new Error("sin datos históricos para esta ubicación");
+    return dates.map(function(d,i){
+      var maxs=[], mins=[], rains=[], codes=[];
+      ok.forEach(function(j){
+        if(!j.daily || j.daily.temperature_2m_max[i] == null) return;
+        maxs.push(j.daily.temperature_2m_max[i]);
+        mins.push(j.daily.temperature_2m_min[i]);
+        rains.push(j.daily.precipitation_sum[i] || 0);
+        codes.push(j.daily.weather_code[i]);
+      });
+      if(!maxs.length) return { date:d, code:null, max:null, min:null, rain:null };
+      var avg = function(a){ return a.reduce(function(x,y){return x+y;},0)/a.length; };
+      var freq = {};
+      codes.forEach(function(c){ freq[c] = (freq[c]||0)+1; });
+      var code = Number(Object.keys(freq).sort(function(a,b){ return freq[b]-freq[a]; })[0]);
+      var wet = rains.filter(function(r){ return r >= 1; }).length;
+      return { date:d, code:code, max:Math.round(avg(maxs)), min:Math.round(avg(mins)),
+               rain: Math.round(100*wet/rains.length), rainLabel:"de los años llovió" };
+    });
+  });
+}
+
+function controlsHTML(){
+  return '<details ' + (state.lat ? "" : "open") + '>'
+    + '<summary>Cambiar ciudad o fechas</summary>'
+    + '<div class="controls">'
+    + '<div class="field"><label>Ciudad</label><input id="q" placeholder="Ej. Cusco" value="'+(state.name||"")+'"></div>'
+    + '<div class="field"><label>Desde</label><input id="s" type="date" value="'+(state.start||"")+'"></div>'
+    + '<div class="field"><label>Hasta</label><input id="e" type="date" value="'+(state.end||"")+'"></div>'
+    + '<button id="go">Ver clima</button>'
+    + '</div><div class="hits" id="hits"></div></details>';
+}
+
+function wireControls(){
+  var go = document.getElementById("go");
+  if(!go) return;
+  go.onclick = function(){
+    var q = document.getElementById("q").value.trim();
+    state.start = document.getElementById("s").value;
+    state.end = document.getElementById("e").value;
+    if(!q || !state.start || !state.end){ alert("Completa la ciudad y las dos fechas."); return; }
+    var hits = document.getElementById("hits");
+    hits.innerHTML = '<div class="hit">Buscando...</div>';
+    jget("https://geocoding-api.open-meteo.com/v1/search?name="+encodeURIComponent(q)+"&count=5&language=es&format=json")
+      .then(function(j){
+        if(!j.results || !j.results.length){ hits.innerHTML = '<div class="hit err">Ciudad no encontrada.</div>'; return; }
+        hits.innerHTML = j.results.map(function(r,i){
+          var sub = [r.admin1, r.country].filter(Boolean).join(", ");
+          return '<div class="hit" data-i="'+i+'">'+r.name+' <small>'+sub+'</small></div>';
+        }).join("");
+        Array.prototype.forEach.call(hits.querySelectorAll(".hit"), function(el){
+          el.onclick = function(){
+            var r = j.results[Number(el.getAttribute("data-i"))];
+            state.lat = r.latitude; state.lon = r.longitude; state.name = r.name;
+            load();
+          };
+        });
+      })
+      .catch(function(err){ hits.innerHTML = '<div class="hit err">Error: '+err.message+'</div>'; });
+  };
+}
+
+function render(days, mode, name){
+  var withT = days.filter(function(d){ return d.max != null; });
+  var okMax = Math.max.apply(null, withT.map(function(d){ return d.max; }));
+  var okMin = Math.min.apply(null, withT.map(function(d){ return d.min; }));
+  var rainy = days.filter(function(d){ return d.rain != null && d.rain >= 50; }).length;
+
+  var badge = mode === "forecast"
+    ? '<span class="badge fc">Pronóstico real</span>'
+    : '<span class="badge hist">Históricos &middot; '+HIST_YEARS+' años</span>';
+
+  var note = mode === "forecast"
+    ? "Pronóstico meteorológico para las fechas del viaje."
+    : "El viaje está a más de "+FC_HORIZON+" días, así que todavía no existe pronóstico. "
+      + "Esto es lo que <b>realmente ocurrió</b> en estas mismas fechas los ultimos "+HIST_YEARS
+      + " años. Vuelve a abrirlo dos semanas antes de salir y verás el pronóstico real.";
+
+  var cards = days.map(function(d){
+    var w = WMO[d.code] || ["-",""];
+    var t = d.max == null ? '<div class="temp">-</div>'
+      : '<div class="temp">'+Math.round(d.max)+'&deg;<span class="min"> / '+Math.round(d.min)+'&deg;</span></div>';
+    var r = (d.rain == null || d.rain === 0) ? '<div class="rain"></div>'
+      : '<div class="rain">'+d.rain+'% '+(d.rainLabel||"")+'</div>';
+    return '<div class="day">'
+      + '<div class="dow">'+DOW[d.date.getUTCDay()]+'</div>'
+      + '<div class="dnum">'+d.date.getUTCDate()+' '+MON[d.date.getUTCMonth()]+'</div>'
+      + '<div class="icon">'+w[0]+'</div>'
+      + '<div class="desc">'+w[1]+'</div>' + t + r + '</div>';
+  }).join("");
+
+  document.getElementById("app").innerHTML =
+      '<div class="top"><h1>'+(name||"Clima")+'</h1>'
+    + '<span class="range">'+fmt(days[0].date)+' - '+fmt(days[days.length-1].date)+'</span>'
+    + badge + '</div>'
+    + '<div class="note">'+note+'</div>'
+    + '<div class="days">'+cards+'</div>'
+    + '<div class="summary">'
+    + '<span>Máxima <b>'+Math.round(okMax)+'&deg;C</b></span>'
+    + '<span>Mínima <b>'+Math.round(okMin)+'&deg;C</b></span>'
+    + '<span>Días con lluvia probable <b>'+rainy+' de '+days.length+'</b></span>'
+    + '</div>' + controlsHTML();
+  wireControls();
+}
+
+function load(){
+  var app = document.getElementById("app");
+  if(!state.lat || !state.start || !state.end){
+    app.innerHTML = '<div class="top"><h1>Clima del viaje</h1></div>'
+      + '<div class="note">Elige una ciudad y las fechas del viaje.</div>' + controlsHTML();
+    wireControls();
+    return;
+  }
+  app.innerHTML = '<div class="msg">Consultando...</div>';
+  var today = parseD(iso(new Date()));
+  var lead = daysBetween(today, parseD(state.start));
+  var dates = buildDates(state.start, state.end);
+  if(!dates.length){
+    app.innerHTML = '<div class="note err">El rango de fechas no es válido.</div>' + controlsHTML();
+    wireControls(); return;
+  }
+  var endCapped = iso(dates[dates.length-1]);
+  var useForecast = lead <= FC_HORIZON && daysBetween(today, parseD(endCapped)) >= 0;
+  var p = useForecast
+    ? getForecast(state.lat, state.lon, state.start, endCapped)
+    : getHistorical(state.lat, state.lon, state.start, endCapped);
+
+  p.then(function(days){ render(days, useForecast ? "forecast" : "historical", state.name); })
+   .catch(function(err){
+      app.innerHTML = '<div class="top"><h1>'+(state.name||"Clima")+'</h1></div>'
+        + '<div class="note err">No se pudo cargar: '+err.message+'</div>' + controlsHTML();
+      wireControls();
+   });
+}
+load();
+</script>
+</body>
+</html>
