@@ -17,80 +17,74 @@
   body{margin:0;background:var(--bg);color:var(--fg);
        font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
        padding:14px;}
-  .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .top{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:12px}
   h1{font-size:17px;margin:0;font-weight:600;letter-spacing:-.01em}
-  .spacer{flex:1}
-  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
-  .seg button{background:transparent;color:var(--muted);border:0;padding:5px 13px;
-              font:inherit;font-size:12px;font-weight:600;cursor:pointer}
-  .seg button.on{background:var(--accent);color:#fff}
-  .conv{display:flex;align-items:stretch;gap:8px;flex-wrap:nowrap}
-  .box{flex:1 1 0;min-width:0;background:var(--card);border:1px solid var(--line);
-       border-radius:11px;padding:10px 12px}
-  .box .cur{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:2px}
+  .sub{font-size:12.5px;color:var(--muted)}
+  .conv{display:flex;gap:8px;flex-wrap:wrap}
+  .box{flex:1 1 150px;min-width:140px;background:var(--card);
+       border:1px solid var(--line);border-radius:11px;padding:10px 12px}
+  .box.local{border-color:var(--accent);background:var(--accentsoft)}
+  .box .cur{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);
+            display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+  .box.local .cur{color:var(--accent)}
+  .box .cur em{font-style:normal;font-weight:500;font-size:10px;opacity:.85;
+               text-transform:none;letter-spacing:0}
   .box input{width:100%;border:0;background:transparent;color:var(--fg);
-             font:inherit;font-size:22px;font-weight:600;padding:0;outline:none;
+             font:inherit;font-size:22px;font-weight:600;padding:2px 0 0;outline:none;
              letter-spacing:-.02em}
   .box input::placeholder{color:var(--line)}
-  .swap{flex:0 0 auto;align-self:center;background:var(--accentsoft);color:var(--accent);
-        border:0;border-radius:50%;width:34px;height:34px;font-size:15px;cursor:pointer;
-        display:flex;align-items:center;justify-content:center}
-  .swap:hover{filter:brightness(.96)}
   .rate{margin-top:11px;font-size:12px;color:var(--muted)}
   .rate b{color:var(--fg);font-weight:600}
   .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px}
   .chip{background:var(--card);border:1px solid var(--line);border-radius:999px;
         padding:4px 11px;font-size:12px;cursor:pointer;color:var(--muted)}
   .chip:hover{border-color:var(--accent);color:var(--accent)}
-  .panel{margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+  .chip.clear{border-style:dashed}
+  .panel{margin-top:12px;padding-top:11px;border-top:1px solid var(--line);
+         display:flex;align-items:flex-end;gap:9px;flex-wrap:wrap}
   .panel label{font-size:11px;color:var(--muted);display:block;margin-bottom:4px}
   select{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);
-         border-radius:6px;background:var(--bg);color:var(--fg)}
+         border-radius:6px;background:var(--bg);color:var(--fg);max-width:100%}
   button.link{background:transparent;border:0;color:var(--muted);font:inherit;font-size:12px;
-              cursor:pointer;padding:0;text-decoration:underline}
+              cursor:pointer;padding:0 0 7px;text-decoration:underline}
   .msg{padding:14px;color:var(--muted);font-size:13px}
   .err{color:#c4554d}
-  [hidden]{display:none !important}
 </style>
 </head>
 <body>
 <div id="app"><div class="msg">Cargando tipos de cambio...</div></div>
 
 <script>
-// Monedas ofrecidas en el selector. El sistema usa las primeras; el resto son de cortesia.
-var MONEDAS = [
-  ["USD","Dolar estadounidense"], ["CRC","Colon costarricense"], ["COP","Peso colombiano"],
-  ["PEN","Sol peruano"], ["BRL","Real brasileno"], ["EUR","Euro"], ["MXN","Peso mexicano"],
-  ["CHF","Franco suizo"], ["JOD","Dinar jordano"], ["EGP","Libra egipcia"],
-  ["CNY","Yuan chino"], ["INR","Rupia india"], ["JPY","Yen japones"], ["ISK","Corona islandesa"],
-  ["GBP","Libra esterlina"], ["CAD","Dolar canadiense"], ["AUD","Dolar australiano"],
-  ["THB","Baht tailandes"], ["AED","Dirham emirati"], ["MAD","Dirham marroqui"],
-  ["TRY","Lira turca"], ["ARS","Peso argentino"], ["CLP","Peso chileno"], ["PAB","Balboa panameno"]
-];
-var SIN_DECIMALES = ["CRC","COP","JPY","ISK","CLP","KRW","VND","PYG","IDR","HUF"];
+var CASA = ["USD", "CRC"];   // las dos monedas propias, siempre visibles
+var SIN_DECIMALES = ["CRC","COP","JPY","ISK","CLP","KRW","VND","PYG","IDR","HUF","XAF","XOF","XPF","RWF","UGX","IQD","LAK","MGA","MMK","TZS","GNF","KMF","DJF","BIF","VUV"];
+// Monedas que salen primero en el selector: las propias + las de los destinos del sistema.
+var FRECUENTES = ["USD","CRC","COP","PEN","BRL","EUR","MXN","CHF","JOD","EGP","CNY","INR","JPY","ISK"];
 
 var qs = new URLSearchParams(location.search);
 var LOCAL_URL = (qs.get("local") || "").toUpperCase();
 var NOMBRE    = qs.get("name") || "";
-
-var KEY_BASE = "moneda:base";      // preferencia global: USD o CRC
 var KEY_LOCAL = "moneda:local:" + (LOCAL_URL || "manual");
 
-function getSaved(k, def){ try { return localStorage.getItem(k) || def; } catch(e){ return def; } }
+function getSaved(k, d){ try { return localStorage.getItem(k) || d; } catch(e){ return d; } }
 function setSaved(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
 
 var state = {
-  base:  getSaved(KEY_BASE, "USD"),                  // moneda de casa
-  local: LOCAL_URL || getSaved(KEY_LOCAL, "COP"),    // moneda del destino; la URL manda
-  invertido: false,
+  local: LOCAL_URL || getSaved(KEY_LOCAL, "COP"),   // la URL manda sobre la memoria
   rates: null,
   fecha: ""
 };
 
+// Nombres de moneda que da el propio navegador: cubre las 166 sin lista fija que mantener.
+var DN = null;
+try { DN = new Intl.DisplayNames(["es"], { type: "currency" }); } catch(e){}
+function nombreMoneda(c){
+  if (!DN) return c;
+  try { var n = DN.of(c); return (n && n !== c) ? n : c; } catch(e){ return c; }
+}
+
 function decimales(cur, v){
   var a = Math.abs(v);
-  // Los valores muy pequenos (ej. 1 COP en USD) necesitan precision o se ven como "0".
-  if (a > 0 && a < 0.01) return 6;
+  if (a > 0 && a < 0.01) return 6;   // si no, "1 COP = 0 USD"
   if (a > 0 && a < 1)    return 4;
   if (SIN_DECIMALES.indexOf(cur) !== -1) return 0;
   return a >= 1000 ? 0 : 2;
@@ -101,7 +95,17 @@ function fmt(v, cur){
     return new Intl.NumberFormat("es-ES", {
       minimumFractionDigits: 0, maximumFractionDigits: decimales(cur, v), useGrouping: "always"
     }).format(v);
-  } catch(e){ return String(Math.round(v*100)/100); }
+  } catch(e){ return String(Math.round(v * 100) / 100); }
+}
+// Las TASAS necesitan decimales aunque la moneda no los use en importes:
+// "1 CRC = 7 COP" es falso; lo correcto es 6,96.
+function fmtTasa(v){
+  var a = Math.abs(v), d = a < 0.01 ? 6 : a < 1 ? 4 : a < 100 ? 2 : 0;
+  try {
+    return new Intl.NumberFormat("es-ES", {
+      minimumFractionDigits: 0, maximumFractionDigits: d, useGrouping: "always"
+    }).format(v);
+  } catch(e){ return String(v); }
 }
 // Acepta "1.000", "1000,50", "1.234,56" y "1,234.56"
 function parseNum(s){
@@ -118,80 +122,80 @@ function convertir(v, de, a){
   if (!state.rates || !state.rates[de] || !state.rates[a]) return NaN;
   return v * state.rates[a] / state.rates[de];
 }
-function ladoIzq(){ return state.invertido ? state.base  : state.local; }
-function ladoDer(){ return state.invertido ? state.local : state.base;  }
 
+// Columnas a mostrar: la local + USD + CRC, sin repetir si la local ya es una de ellas.
+function columnas(){
+  var out = [state.local];
+  CASA.forEach(function(c){ if (out.indexOf(c) === -1) out.push(c); });
+  return out;
+}
 function atajos(){
-  var r = state.rates ? state.rates[ladoIzq()] : 1;   // unidades por USD
-  if (r > 500)  return [1000, 5000, 10000, 50000];
-  if (r > 20)   return [100, 500, 1000, 5000];
+  var r = state.rates ? state.rates[state.local] : 1;   // unidades por dolar
+  if (r > 500) return [1000, 5000, 10000, 50000];
+  if (r > 20)  return [100, 500, 1000, 5000];
   return [5, 10, 25, 100];
 }
 
+function opcionesSelector(){
+  var todas = Object.keys(state.rates).sort();
+  var resto = todas.filter(function(c){ return FRECUENTES.indexOf(c) === -1; });
+  function opt(c){
+    return '<option value="' + c + '"' + (c === state.local ? " selected" : "") + '>'
+         + c + ' — ' + nombreMoneda(c) + '</option>';
+  }
+  return '<optgroup label="Frecuentes">' + FRECUENTES.filter(function(c){ return todas.indexOf(c) !== -1; }).map(opt).join("") + '</optgroup>'
+       + '<optgroup label="Todas (' + todas.length + ')">' + resto.map(opt).join("") + '</optgroup>';
+}
+
 function pintar(){
-  var izq = ladoIzq(), der = ladoDer();
-  var mismo = izq === der;
-  var unaUnidad = convertir(1, izq, der);
+  var cols = columnas();
+  var loc  = state.local;
+
+  var cajas = cols.map(function(c){
+    var esLocal = (c === loc);
+    return '<div class="box' + (esLocal ? " local" : "") + '">'
+      + '<div class="cur"><span>' + c + '</span>'
+      + '<em>' + (esLocal ? "moneda local" : nombreMoneda(c)) + '</em></div>'
+      + '<input id="in_' + c + '" data-cur="' + c + '" inputmode="decimal" placeholder="0">'
+      + '</div>';
+  }).join("");
+
+  var tasas = cols.filter(function(c){ return c !== loc; }).map(function(c){
+    return '1 ' + c + ' = <b>' + fmtTasa(convertir(1, c, loc)) + ' ' + loc + '</b>';
+  }).join('&nbsp;&middot;&nbsp; ');
 
   document.getElementById("app").innerHTML =
-      '<div class="top">'
-    + '<h1>' + (NOMBRE ? NOMBRE : "Conversor") + '</h1>'
-    + '<span class="spacer"></span>'
-    + '<div class="seg">'
-    +   '<button id="bUSD" class="' + (state.base === "USD" ? "on" : "") + '">USD</button>'
-    +   '<button id="bCRC" class="' + (state.base === "CRC" ? "on" : "") + '">CRC</button>'
-    + '</div></div>'
-
-    + '<div class="conv">'
-    + '<div class="box"><div class="cur">' + izq + '</div>'
-    +   '<input id="in1" inputmode="decimal" placeholder="0"></div>'
-    + '<button class="swap" id="swap" title="Invertir">&#8646;</button>'
-    + '<div class="box"><div class="cur">' + der + '</div>'
-    +   '<input id="in2" inputmode="decimal" placeholder="0"></div>'
+      '<div class="top"><h1>' + (NOMBRE || "Conversor") + '</h1>'
+    + '<span class="sub">' + nombreMoneda(loc) + '</span></div>'
+    + '<div class="conv">' + cajas + '</div>'
+    + '<div class="rate">' + (cols.length > 1 ? tasas : "Es tu misma moneda.")
+    + (state.fecha ? '<br>Tipo de cambio actualizado el ' + state.fecha + '.' : '') + '</div>'
+    + '<div class="chips">'
+    +   atajos().map(function(n){ return '<span class="chip" data-n="' + n + '">' + fmt(n, loc) + ' ' + loc + '</span>'; }).join("")
+    +   '<span class="chip clear" id="clear">Limpiar</span>'
     + '</div>'
-
-    + '<div class="rate">' + (mismo
-        ? 'Es la misma moneda.'
-        : '1 ' + izq + ' = <b>' + fmt(unaUnidad, der) + ' ' + der + '</b>'
-          + '&nbsp;&middot;&nbsp; 1 ' + der + ' = <b>' + fmt(convertir(1, der, izq), izq) + ' ' + izq + '</b>')
-    + (state.fecha ? '<br>Tipo de cambio actualizado el ' + state.fecha + '.' : '')
-    + '</div>'
-
-    + '<div class="chips">' + atajos().map(function(n){
-        return '<span class="chip" data-n="' + n + '">' + fmt(n, izq) + ' ' + izq + '</span>';
-      }).join("") + '</div>'
-
-    + '<div class="panel">'
-    + '<label>Moneda del destino</label>'
-    + '<select id="sel">' + MONEDAS.map(function(m){
-        return '<option value="' + m[0] + '"' + (m[0] === state.local ? " selected" : "") + '>'
-             + m[0] + ' — ' + m[1] + '</option>';
-      }).join("") + '</select>'
-    + (LOCAL_URL ? ' <button class="link" id="reset">volver a ' + LOCAL_URL + '</button>' : '')
+    + '<div class="panel"><div><label>Moneda del destino</label>'
+    + '<select id="sel">' + opcionesSelector() + '</select></div>'
+    + (LOCAL_URL && state.local !== LOCAL_URL ? '<button class="link" id="reset">volver a ' + LOCAL_URL + '</button>' : '')
     + '</div>';
 
   conectar();
 }
 
 function conectar(){
-  var in1 = document.getElementById("in1"), in2 = document.getElementById("in2");
-  in1.oninput = function(){
-    var v = parseNum(in1.value);
-    in2.value = isFinite(v) ? fmt(convertir(v, ladoIzq(), ladoDer()), ladoDer()) : "";
-  };
-  in2.oninput = function(){
-    var v = parseNum(in2.value);
-    in1.value = isFinite(v) ? fmt(convertir(v, ladoDer(), ladoIzq()), ladoIzq()) : "";
-  };
-  document.getElementById("swap").onclick = function(){
-    state.invertido = !state.invertido; pintar();
-  };
-  document.getElementById("bUSD").onclick = function(){
-    state.base = "USD"; setSaved(KEY_BASE, "USD"); pintar();
-  };
-  document.getElementById("bCRC").onclick = function(){
-    state.base = "CRC"; setSaved(KEY_BASE, "CRC"); pintar();
-  };
+  var inputs = Array.prototype.slice.call(document.querySelectorAll("[data-cur]"));
+
+  function propagar(origen){
+    var de = origen.getAttribute("data-cur");
+    var v  = parseNum(origen.value);
+    inputs.forEach(function(el){
+      if (el === origen) return;
+      var a = el.getAttribute("data-cur");
+      el.value = isFinite(v) ? fmt(convertir(v, de, a), a) : "";
+    });
+  }
+  inputs.forEach(function(el){ el.oninput = function(){ propagar(el); }; });
+
   document.getElementById("sel").onchange = function(e){
     state.local = e.target.value; setSaved(KEY_LOCAL, state.local); pintar();
   };
@@ -199,19 +203,26 @@ function conectar(){
   if (rs) rs.onclick = function(){
     state.local = LOCAL_URL; setSaved(KEY_LOCAL, LOCAL_URL); pintar();
   };
-  Array.prototype.forEach.call(document.querySelectorAll(".chip"), function(c){
+  document.getElementById("clear").onclick = function(){
+    inputs.forEach(function(el){ el.value = ""; });
+    if (inputs[0]) inputs[0].focus();
+  };
+  Array.prototype.forEach.call(document.querySelectorAll(".chip[data-n]"), function(c){
     c.onclick = function(){
-      in1.value = c.getAttribute("data-n");
-      in1.oninput();
+      var first = document.querySelector('[data-cur="' + state.local + '"]');
+      if (!first) return;
+      first.value = c.getAttribute("data-n");
+      first.oninput();
     };
   });
 }
 
 fetch("https://open.er-api.com/v6/latest/USD")
-  .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+  .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
   .then(function(j){
     if (j.result !== "success") throw new Error("respuesta inesperada de la API");
     state.rates = j.rates;
+    if (!state.rates[state.local]) state.local = "USD";   // por si llega un codigo raro
     var d = j.time_last_update_utc ? new Date(j.time_last_update_utc) : null;
     state.fecha = d ? d.getUTCDate() + " "
       + ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"][d.getUTCMonth()]
