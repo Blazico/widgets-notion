@@ -7,30 +7,37 @@
 <style>
   :root{
     --bg:#ffffff; --fg:#37352f; --muted:#787774; --line:#e9e9e7;
-    --card:#f7f7f5; --accent:#2383e2; --warnbg:#fdf3e3; --warnfg:#b8860b;
+    --card:#f7f7f5; --accent:#2383e2;
     --okbg:#eaf3ee; --okfg:#448361;
+    --warnbg:#fdf3e3; --warnfg:#b8860b;
+    --infobg:#e7f1fb; --infofg:#2b6cb0;
   }
   @media (prefers-color-scheme: dark){
     :root{ --bg:#191919; --fg:#e6e6e4; --muted:#9b9b98; --line:#2f2f2f;
-           --card:#242424; --accent:#5aa9f0; --warnbg:#3a2f1c; --warnfg:#e0a94a;
-           --okbg:#1e2c24; --okfg:#6fae88; }
+           --card:#242424; --accent:#5aa9f0;
+           --okbg:#1e2c24; --okfg:#6fae88;
+           --warnbg:#3a2f1c; --warnfg:#e0a94a;
+           --infobg:#1c2a38; --infofg:#7cb3e8; }
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--fg);
        font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
        padding:14px;}
-  .top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
   h1{font-size:17px;margin:0;font-weight:600;letter-spacing:-.01em}
   .range{color:var(--muted);font-size:13px}
-  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
+  .badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;
          padding:3px 9px;border-radius:999px;white-space:nowrap}
   .badge.fc{background:var(--okbg);color:var(--okfg)}
-  .badge.hist{background:var(--warnbg);color:var(--warnfg)}
-  .note{color:var(--muted);font-size:12px;margin:8px 0 12px}
+  .badge.past{background:var(--infobg);color:var(--infofg)}
+  .badge.clima{background:var(--warnbg);color:var(--warnfg)}
+  .note{color:var(--muted);font-size:12px;margin:9px 0 12px}
   .days{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px}
   .day{flex:0 0 94px;background:var(--card);border:1px solid var(--line);
        border-radius:10px;padding:9px 8px;text-align:center}
+  .day.hoy{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
   .dow{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .day.hoy .dow{color:var(--accent);font-weight:700}
   .dnum{font-size:12px;font-weight:600;margin-bottom:4px}
   .icon{font-size:22px;line-height:1.3}
   .desc{font-size:10px;color:var(--muted);height:26px;display:flex;align-items:center;
@@ -41,9 +48,7 @@
   .summary{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;padding-top:10px;
            border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
   .summary b{color:var(--fg);font-weight:600}
-  details{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
-  summary{cursor:pointer;font-size:12px;color:var(--muted)}
-  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
   .field{display:flex;flex-direction:column;gap:3px}
   .field label{font-size:11px;color:var(--muted)}
   input{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);
@@ -54,14 +59,13 @@
   button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:400}
   button.small{font-size:11px;padding:4px 10px;border-radius:999px}
   .panel{margin:10px 0 0;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
-  .panel .controls{margin-top:0}
-  [hidden]{display:none !important}
   .hits{margin-top:8px;display:flex;flex-direction:column;gap:2px}
   .hit{cursor:pointer;padding:6px 8px;border-radius:6px;font-size:13px}
-  .hit:hover{background:var(--card)}
+  .hit:hover{background:var(--bg)}
   .hit small{color:var(--muted)}
   .msg{padding:14px;color:var(--muted);font-size:13px}
   .err{color:#c4554d}
+  [hidden]{display:none !important}
 </style>
 </head>
 <body>
@@ -86,9 +90,17 @@ var WMO = {
 };
 var DOW = ["dom","lun","mar","mié","jue","vie","sáb"];
 var MON = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-var HIST_YEARS = 5;
-var MAX_DAYS = 21;
-var FC_HORIZON = 15;
+var HIST_YEARS = 5;    // anos hacia atras para la climatologia
+var MAX_DAYS   = 21;   // tope de dias mostrados
+var FC_HORIZON = 15;   // dias de pronostico fiable
+var DEF_BACK   = 3;    // vista por defecto: desde hoy -3
+var DEF_FWD    = 7;    // hasta hoy +7
+
+function iso(d){ return d.toISOString().slice(0,10); }
+function parseD(s){ var p = s.split("-").map(Number); return new Date(Date.UTC(p[0],p[1]-1,p[2])); }
+function fmt(d){ return DOW[d.getUTCDay()] + " " + d.getUTCDate() + " " + MON[d.getUTCMonth()]; }
+function daysBetween(a,b){ return Math.round((b-a)/86400000); }   // b - a, en dias
+function today(){ return parseD(iso(new Date())); }
 
 var qs = new URLSearchParams(location.search);
 var urlState = {
@@ -99,12 +111,11 @@ var urlState = {
   end: qs.get("end") || ""
 };
 
-// Memoria: una clave por ubicacion, para que cada widget recuerde lo suyo.
+// Memoria local: una clave por ubicacion para que cada widget recuerde lo suyo.
 var STORE_KEY = "clima:" + (isFinite(urlState.lat) ? urlState.lat + "," + urlState.lon : "manual");
-
 function loadSaved(){
   try { var raw = localStorage.getItem(STORE_KEY); return raw ? JSON.parse(raw) : null; }
-  catch(e){ return null; }   // iframes de terceros pueden bloquear el storage
+  catch(e){ return null; }   // un iframe de terceros puede bloquear el storage
 }
 function saveState(){
   try {
@@ -115,9 +126,9 @@ function saveState(){
 }
 function clearSaved(){ try { localStorage.removeItem(STORE_KEY); } catch(e){} }
 
+// PRECEDENCIA: URL > memoria local > rango por defecto (hoy-3 a hoy+7).
+// La URL es lo unico que viaja entre dispositivos y entre personas.
 var saved = loadSaved();
-// PRECEDENCIA: la URL manda. Es lo unico que viaja entre dispositivos y entre personas.
-// La memoria local solo rellena lo que la URL no trae (p.ej. paginas de Destino sin fechas).
 var state = {
   lat:   isFinite(urlState.lat) ? urlState.lat : (saved && isFinite(saved.lat) ? saved.lat : NaN),
   lon:   isFinite(urlState.lon) ? urlState.lon : (saved && isFinite(saved.lon) ? saved.lon : NaN),
@@ -125,43 +136,71 @@ var state = {
   start: urlState.start || (saved && saved.start ? saved.start : ""),
   end:   urlState.end   || (saved && saved.end   ? saved.end   : "")
 };
-
-function iso(d){ return d.toISOString().slice(0,10); }
-function parseD(s){ var p = s.split("-").map(Number); return new Date(Date.UTC(p[0],p[1]-1,p[2])); }
-function fmt(d){ return DOW[d.getUTCDay()] + " " + d.getUTCDate() + " " + MON[d.getUTCMonth()]; }
-function daysBetween(a,b){ return Math.round((b-a)/86400000); }
+var usandoDefecto = false;
+if (isFinite(state.lat) && (!state.start || !state.end)) {
+  var _t = new Date();
+  state.start = iso(new Date(_t.getTime() - DEF_BACK*86400000));
+  state.end   = iso(new Date(_t.getTime() + DEF_FWD*86400000));
+  usandoDefecto = true;
+}
 
 function buildDates(start,end){
   var out = [], d = parseD(start), last = parseD(end);
   while (d <= last && out.length < MAX_DAYS){ out.push(new Date(d)); d = new Date(d.getTime()+86400000); }
   return out;
 }
-
 function jget(url){
   return fetch(url).then(function(r){
     if(!r.ok) throw new Error("HTTP " + r.status);
     return r.json();
   });
 }
+function hayDatos(days){
+  for (var i=0;i<days.length;i++) if (days[i].max != null) return true;
+  return false;
+}
 
+// --- PRONOSTICO (tambien sirve para el pasado reciente, ~90 dias) ---
 function getForecast(lat,lon,start,end){
   var u = "https://api.open-meteo.com/v1/forecast?latitude="+lat+"&longitude="+lon
-    + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+    + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum"
     + "&start_date="+start+"&end_date="+end+"&timezone=auto";
   return jget(u).then(function(j){
     return j.daily.time.map(function(t,i){
+      var prob = j.daily.precipitation_probability_max[i];
+      var mm   = j.daily.precipitation_sum[i];
+      var txt = null, wet = false;
+      if (prob != null && prob > 0){ txt = prob + "% prob."; wet = prob >= 50; }
+      else if (mm != null && mm >= 0.1){ txt = mm.toFixed(1) + " mm"; wet = mm >= 1; }
       return { date: parseD(t), code: j.daily.weather_code[i],
                max: j.daily.temperature_2m_max[i], min: j.daily.temperature_2m_min[i],
-               rain: j.daily.precipitation_probability_max[i], rainLabel: "prob. lluvia" };
+               rainText: txt, wet: wet };
     });
   });
 }
 
+// --- HISTORICO EXACTO: lo que de verdad ocurrio en ESAS fechas ---
+function getArchiveExact(lat,lon,start,end){
+  var u = "https://archive-api.open-meteo.com/v1/archive?latitude="+lat+"&longitude="+lon
+    + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum"
+    + "&start_date="+start+"&end_date="+end+"&timezone=auto";
+  return jget(u).then(function(j){
+    return j.daily.time.map(function(t,i){
+      var mm = j.daily.precipitation_sum[i];
+      return { date: parseD(t), code: j.daily.weather_code[i],
+               max: j.daily.temperature_2m_max[i], min: j.daily.temperature_2m_min[i],
+               rainText: (mm != null && mm >= 0.1) ? mm.toFixed(1) + " mm" : null,
+               wet: mm != null && mm >= 1 };
+    });
+  });
+}
+
+// --- CLIMATOLOGIA: esas mismas fechas en los ultimos N anos ---
 function getHistorical(lat,lon,start,end){
   var dates = buildDates(start,end);
-  var thisYear = new Date().getUTCFullYear();
+  var y0 = new Date().getUTCFullYear();
   var years = [];
-  for (var k = 1; k <= HIST_YEARS; k++) years.push(thisYear - k);
+  for (var k = 1; k <= HIST_YEARS; k++) years.push(y0 - k);
   var s0 = parseD(start);
 
   return Promise.all(years.map(function(y){
@@ -183,14 +222,13 @@ function getHistorical(lat,lon,start,end){
         rains.push(j.daily.precipitation_sum[i] || 0);
         codes.push(j.daily.weather_code[i]);
       });
-      if(!maxs.length) return { date:d, code:null, max:null, min:null, rain:null };
+      if(!maxs.length) return { date:d, code:null, max:null, min:null, rainText:null, wet:false };
       var avg = function(a){ return a.reduce(function(x,y){return x+y;},0)/a.length; };
-      var freq = {};
-      codes.forEach(function(c){ freq[c] = (freq[c]||0)+1; });
+      var freq = {}; codes.forEach(function(c){ freq[c] = (freq[c]||0)+1; });
       var code = Number(Object.keys(freq).sort(function(a,b){ return freq[b]-freq[a]; })[0]);
-      var wet = rains.filter(function(r){ return r >= 1; }).length;
+      var pct = Math.round(100 * rains.filter(function(r){ return r >= 1; }).length / rains.length);
       return { date:d, code:code, max:Math.round(avg(maxs)), min:Math.round(avg(mins)),
-               rain: Math.round(100*wet/rains.length), rainLabel:"de los años llovió" };
+               rainText: pct > 0 ? pct + "% de los años" : null, wet: pct >= 50 };
     });
   });
 }
@@ -202,7 +240,7 @@ function controlsHTML(open){
     + '<div class="field"><label>Desde</label><input id="s" type="date" value="'+(state.start||"")+'"></div>'
     + '<div class="field"><label>Hasta</label><input id="e" type="date" value="'+(state.end||"")+'"></div>'
     + '<button id="go">Ver clima</button>'
-    + ((loadSaved() && !urlState.start) ? '<button id="reset" class="ghost">Restablecer</button>' : '')
+    + ((loadSaved() && !urlState.start) ? '<button id="reset" class="ghost">Volver a hoy</button>' : '')
     + '</div><div class="hits" id="hits"></div></div>';
 }
 
@@ -216,8 +254,9 @@ function wireControls(){
   go.onclick = function(){
     var q = document.getElementById("q").value.trim();
     state.start = document.getElementById("s").value;
-    state.end = document.getElementById("e").value;
+    state.end   = document.getElementById("e").value;
     if(!q || !state.start || !state.end){ alert("Completa la ciudad y las dos fechas."); return; }
+    usandoDefecto = false;
     var hits = document.getElementById("hits");
     hits.innerHTML = '<div class="hit">Buscando...</div>';
     jget("https://geocoding-api.open-meteo.com/v1/search?name="+encodeURIComponent(q)+"&count=5&language=es&format=json")
@@ -239,80 +278,111 @@ function wireControls(){
   };
 }
 
-function render(days, mode, name){
-  var withT = days.filter(function(d){ return d.max != null; });
-  var okMax = Math.max.apply(null, withT.map(function(d){ return d.max; }));
-  var okMin = Math.min.apply(null, withT.map(function(d){ return d.min; }));
-  var rainy = days.filter(function(d){ return d.rain != null && d.rain >= 50; }).length;
+var MODOS = {
+  forecast: { cls:"fc",    txt:"Pronóstico real",
+              nota:"Pronóstico meteorológico. Los días anteriores a hoy ya son datos medidos.",
+              lluvia:"Días con lluvia probable" },
+  past:     { cls:"past",  txt:"Histórico",
+              nota:"Estas fechas ya pasaron. Esto es el clima que <b>realmente hubo</b>, no una estimación.",
+              lluvia:"Días que llovió" },
+  clima:    { cls:"clima", txt:"Histórico · " + HIST_YEARS + " años",
+              nota:"Faltan más de " + FC_HORIZON + " días, así que todavía no existe pronóstico. Esto es lo que ocurrió en estas mismas fechas los últimos " + HIST_YEARS + " años. Vuelve dos semanas antes de salir y verás el pronóstico real.",
+              lluvia:"Días con lluvia probable" }
+};
 
-  var badge = mode === "forecast"
-    ? '<span class="badge fc">Pronóstico real</span>'
-    : '<span class="badge hist">Históricos &middot; '+HIST_YEARS+' años</span>';
-
-  var note = mode === "forecast"
-    ? "Pronóstico meteorológico para las fechas del viaje."
-    : "El viaje está a más de "+FC_HORIZON+" días, así que todavía no existe pronóstico. "
-      + "Esto es lo que <b>realmente ocurrió</b> en estas mismas fechas los ultimos "+HIST_YEARS
-      + " años. Vuelve a abrirlo dos semanas antes de salir y verás el pronóstico real.";
+function render(days, modo, name){
+  var m = MODOS[modo];
+  var conT = days.filter(function(d){ return d.max != null; });
+  var okMax = conT.length ? Math.max.apply(null, conT.map(function(d){ return d.max; })) : null;
+  var okMin = conT.length ? Math.min.apply(null, conT.map(function(d){ return d.min; })) : null;
+  var wet = days.filter(function(d){ return d.wet; }).length;
+  var hoyISO = iso(today());
 
   var cards = days.map(function(d){
-    var w = WMO[d.code] || ["-",""];
-    var t = d.max == null ? '<div class="temp">-</div>'
+    var w = WMO[d.code] || ["–",""];
+    var esHoy = iso(d.date) === hoyISO;
+    var t = d.max == null ? '<div class="temp">–</div>'
       : '<div class="temp">'+Math.round(d.max)+'&deg;<span class="min"> / '+Math.round(d.min)+'&deg;</span></div>';
-    var r = (d.rain == null || d.rain === 0) ? '<div class="rain"></div>'
-      : '<div class="rain">'+d.rain+'% '+(d.rainLabel||"")+'</div>';
-    return '<div class="day">'
-      + '<div class="dow">'+DOW[d.date.getUTCDay()]+'</div>'
+    return '<div class="day'+(esHoy?' hoy':'')+'">'
+      + '<div class="dow">'+(esHoy ? 'HOY' : DOW[d.date.getUTCDay()])+'</div>'
       + '<div class="dnum">'+d.date.getUTCDate()+' '+MON[d.date.getUTCMonth()]+'</div>'
       + '<div class="icon">'+w[0]+'</div>'
-      + '<div class="desc">'+w[1]+'</div>' + t + r + '</div>';
+      + '<div class="desc">'+w[1]+'</div>' + t
+      + '<div class="rain">'+(d.rainText || "")+'</div></div>';
   }).join("");
 
   document.getElementById("app").innerHTML =
       '<div class="top"><h1>'+(name||"Clima")+'</h1>'
-    + '<span class="range">'+fmt(days[0].date)+' - '+fmt(days[days.length-1].date)+'</span>'
-    + badge
+    + '<span class="range">'+fmt(days[0].date)+' – '+fmt(days[days.length-1].date)+'</span>'
+    + '<span class="badge '+m.cls+'">'+m.txt+'</span>'
     + '<button id="toggle" class="ghost small">Cambiar fechas o ciudad</button>'
     + '</div>'
     + controlsHTML(false)
-    + '<div class="note">'+note+'</div>'
+    + '<div class="note">'+m.nota+'</div>'
     + '<div class="days">'+cards+'</div>'
-    + '<div class="summary">'
-    + '<span>Máxima <b>'+Math.round(okMax)+'&deg;C</b></span>'
-    + '<span>Mínima <b>'+Math.round(okMin)+'&deg;C</b></span>'
-    + '<span>Días con lluvia probable <b>'+rainy+' de '+days.length+'</b></span>'
-    + '</div>';
+    + (okMax == null ? '' :
+        '<div class="summary">'
+      + '<span>Máxima <b>'+Math.round(okMax)+'&deg;C</b></span>'
+      + '<span>Mínima <b>'+Math.round(okMin)+'&deg;C</b></span>'
+      + '<span>'+m.lluvia+' <b>'+wet+' de '+days.length+'</b></span>'
+      + '</div>');
   wireControls();
+}
+
+// Elige el modo, y cae a la siguiente opcion si no hay datos.
+function resolver(){
+  var t = today();
+  var dates = buildDates(state.start, state.end);
+  if(!dates.length) return Promise.reject(new Error("el rango de fechas no es válido"));
+  var endCap = iso(dates[dates.length-1]);
+  var startLead = daysBetween(t, parseD(state.start));   // >0 = futuro
+  var endLead   = daysBetween(t, parseD(endCap));
+
+  if (endLead < 0) {
+    // Todo el rango ya paso -> historico exacto. Si el archivo aun no lo tiene,
+    // el endpoint de pronostico cubre el pasado reciente. Si tampoco, climatologia.
+    return getArchiveExact(state.lat, state.lon, state.start, endCap)
+      .then(function(d){
+        if (hayDatos(d)) return { days:d, modo:"past" };
+        return getForecast(state.lat, state.lon, state.start, endCap).then(function(d2){
+          if (hayDatos(d2)) return { days:d2, modo:"past" };
+          throw new Error("sin datos");
+        });
+      })
+      .catch(function(){
+        return getHistorical(state.lat, state.lon, state.start, endCap)
+          .then(function(d3){ return { days:d3, modo:"clima" }; });
+      });
+  }
+
+  if (startLead <= FC_HORIZON) {
+    return getForecast(state.lat, state.lon, state.start, endCap)
+      .then(function(d){ return { days:d, modo:"forecast" }; });
+  }
+
+  return getHistorical(state.lat, state.lon, state.start, endCap)
+    .then(function(d){ return { days:d, modo:"clima" }; });
 }
 
 function load(){
   var app = document.getElementById("app");
-  if(!state.lat || !state.start || !state.end){
+  if(!isFinite(state.lat) || !state.start || !state.end){
     app.innerHTML = '<div class="top"><h1>Clima del viaje</h1></div>'
-      + '<div class="note">Elige una ciudad y las fechas del viaje.</div>' + controlsHTML(true);
+      + '<div class="note">Elige una ciudad y las fechas.</div>' + controlsHTML(true);
     wireControls();
     return;
   }
   app.innerHTML = '<div class="msg">Consultando...</div>';
-  var today = parseD(iso(new Date()));
-  var lead = daysBetween(today, parseD(state.start));
-  var dates = buildDates(state.start, state.end);
-  if(!dates.length){
-    app.innerHTML = '<div class="note err">El rango de fechas no es válido.</div>' + controlsHTML(true);
-    wireControls(); return;
-  }
-  var endCapped = iso(dates[dates.length-1]);
-  var useForecast = lead <= FC_HORIZON && daysBetween(today, parseD(endCapped)) >= 0;
-  var p = useForecast
-    ? getForecast(state.lat, state.lon, state.start, endCapped)
-    : getHistorical(state.lat, state.lon, state.start, endCapped);
-
-  p.then(function(days){ saveState(); render(days, useForecast ? "forecast" : "historical", state.name); })
-   .catch(function(err){
+  resolver()
+    .then(function(res){
+      if(!usandoDefecto) saveState();   // el rango por defecto no se memoriza
+      render(res.days, res.modo, state.name);
+    })
+    .catch(function(err){
       app.innerHTML = '<div class="top"><h1>'+(state.name||"Clima")+'</h1></div>'
         + '<div class="note err">No se pudo cargar: '+err.message+'</div>' + controlsHTML(true);
       wireControls();
-   });
+    });
 }
 load();
 </script>
