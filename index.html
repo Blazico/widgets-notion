@@ -52,6 +52,10 @@
   button{font:inherit;font-size:13px;font-weight:500;padding:7px 14px;border:0;
          border-radius:6px;background:var(--accent);color:#fff;cursor:pointer}
   button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:400}
+  button.small{font-size:11px;padding:4px 10px;border-radius:999px}
+  .panel{margin:10px 0 0;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+  .panel .controls{margin-top:0}
+  [hidden]{display:none !important}
   .hits{margin-top:8px;display:flex;flex-direction:column;gap:2px}
   .hit{cursor:pointer;padding:6px 8px;border-radius:6px;font-size:13px}
   .hit:hover{background:var(--card)}
@@ -191,19 +195,20 @@ function getHistorical(lat,lon,start,end){
   });
 }
 
-function controlsHTML(){
-  return '<details ' + (state.lat ? "" : "open") + '>'
-    + '<summary>Cambiar ciudad o fechas</summary>'
+function controlsHTML(open){
+  return '<div class="panel" id="panel"' + (open ? '' : ' hidden') + '>'
     + '<div class="controls">'
     + '<div class="field"><label>Ciudad</label><input id="q" placeholder="Ej. Cusco" value="'+(state.name||"")+'"></div>'
     + '<div class="field"><label>Desde</label><input id="s" type="date" value="'+(state.start||"")+'"></div>'
     + '<div class="field"><label>Hasta</label><input id="e" type="date" value="'+(state.end||"")+'"></div>'
     + '<button id="go">Ver clima</button>'
     + ((loadSaved() && !urlState.start) ? '<button id="reset" class="ghost">Restablecer</button>' : '')
-    + '</div><div class="hits" id="hits"></div></details>';
+    + '</div><div class="hits" id="hits"></div></div>';
 }
 
 function wireControls(){
+  var tg = document.getElementById("toggle"), panel = document.getElementById("panel");
+  if(tg && panel) tg.onclick = function(){ panel.hidden = !panel.hidden; };
   var rs = document.getElementById("reset");
   if(rs) rs.onclick = function(){ clearSaved(); location.reload(); };
   var go = document.getElementById("go");
@@ -266,14 +271,17 @@ function render(days, mode, name){
   document.getElementById("app").innerHTML =
       '<div class="top"><h1>'+(name||"Clima")+'</h1>'
     + '<span class="range">'+fmt(days[0].date)+' - '+fmt(days[days.length-1].date)+'</span>'
-    + badge + '</div>'
+    + badge
+    + '<button id="toggle" class="ghost small">Cambiar fechas o ciudad</button>'
+    + '</div>'
+    + controlsHTML(false)
     + '<div class="note">'+note+'</div>'
     + '<div class="days">'+cards+'</div>'
     + '<div class="summary">'
     + '<span>Máxima <b>'+Math.round(okMax)+'&deg;C</b></span>'
     + '<span>Mínima <b>'+Math.round(okMin)+'&deg;C</b></span>'
     + '<span>Días con lluvia probable <b>'+rainy+' de '+days.length+'</b></span>'
-    + '</div>' + controlsHTML();
+    + '</div>';
   wireControls();
 }
 
@@ -281,7 +289,7 @@ function load(){
   var app = document.getElementById("app");
   if(!state.lat || !state.start || !state.end){
     app.innerHTML = '<div class="top"><h1>Clima del viaje</h1></div>'
-      + '<div class="note">Elige una ciudad y las fechas del viaje.</div>' + controlsHTML();
+      + '<div class="note">Elige una ciudad y las fechas del viaje.</div>' + controlsHTML(true);
     wireControls();
     return;
   }
@@ -290,7 +298,7 @@ function load(){
   var lead = daysBetween(today, parseD(state.start));
   var dates = buildDates(state.start, state.end);
   if(!dates.length){
-    app.innerHTML = '<div class="note err">El rango de fechas no es válido.</div>' + controlsHTML();
+    app.innerHTML = '<div class="note err">El rango de fechas no es válido.</div>' + controlsHTML(true);
     wireControls(); return;
   }
   var endCapped = iso(dates[dates.length-1]);
@@ -302,7 +310,7 @@ function load(){
   p.then(function(days){ saveState(); render(days, useForecast ? "forecast" : "historical", state.name); })
    .catch(function(err){
       app.innerHTML = '<div class="top"><h1>'+(state.name||"Clima")+'</h1></div>'
-        + '<div class="note err">No se pudo cargar: '+err.message+'</div>' + controlsHTML();
+        + '<div class="note err">No se pudo cargar: '+err.message+'</div>' + controlsHTML(true);
       wireControls();
    });
 }
